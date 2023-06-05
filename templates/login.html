@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>로그인 페이지</title>
+</head>
+<body>
+    <h1>로그인</h1>
+    <form method="POST" action="{{ url_for('login') }}">
+        <label>아이디</label>
+        <input type="text" name="username"><br>
+        <label>비밀번호</label>
+        <input type="password" name="password"><br>
+        <input type="submit" value="로그인">
+    </form>
+    <p>아직 회원이 아니신가요? <a href="/signup">회원가입</a></p>
+    <p>메인 화면으로 이동하려면 <a href="{{ url_for('home') }}">여기</a>를 클릭하세요.</p>
+</body>
+</html>
