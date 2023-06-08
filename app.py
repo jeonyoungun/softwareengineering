@@ -1,176 +1,309 @@
 from flask import Flask, render_template, request, session, redirect, url_for
+from pymongo import MongoClient
+from flask_pymongo import PyMongo
+from datetime import datetime
+
+
+# app = Flask(__name__)
+
 
 app = Flask(__name__)
-app.secret_key = 'mysecretkey'  # 임의의 시크릿 키를 설정합니다.
+app.config["MONGO_URI"] = "mongodb://localhost:27017/softwear"  # MongoDB 연결 URI
+mongo = PyMongo(app)
 
-class Coin:
-    def __init__(self, sold_time, coin_type, quantity, price):
-        self.sold_time = sold_time
-        self.coin_type = coin_type
-        self.quantity = quantity
-        self.price = price
-
-    def get_sold_time(self):
-        return self.sold_time
-
-    def get_coin_type(self):
-        return self.coin_type
-
-    def get_quantity(self):
-        return self.quantity
-
-    def get_price(self):
-        return self.price
-
-
-class User:
-    def __init__(self, name, username, password):
-        self.name = name
-        self.username = username
-        self.password = password
-        self.coins = []  # 여러 개의 코인을 저장할 리스트
-        self.seed_money = 0
-
-    def get_username(self):
-        return self.username
-
-    def check_password(self, password):
-        return self.password == password
-
-
-    def add_coin(self, coin):
-        self.coins.append(coin)
-
-    def remove_coin(self, coin):
-        self.coins.remove(coin)
-
-    def get_seed_money(self):
-        return self.seed_money
-
-    def add_seed_money(self, new_seed_money):
-        self.seed_money += new_seed_money
-    def remove_seed_money(self, new_seed_money):
-        self.seed_money -= new_seed_money
- 
-        
-users = [] 
+app.secret_key = "mysecretkey"  # Set your own secret key
+cluster = MongoClient(
+    "mongodb+srv://2001dyddns:Z9QvQuFlMUzK2Ige@coinapp.h7x0xzm.mongodb.net/?retryWrites=true&w=majority"
+)
+db = cluster["coinmarket"]
+usercol = db["user"]
+coincol = db["coin"]
+marketcol = db["marketplace"]
 coin_inventory = 100
 coin_firstprice = 100
+if marketcol.count_documents({}) == 0:
+    marketcol.insert_one(
+        {"coin_inventory": coin_inventory, "coin_firstprice": coin_firstprice}
+    )
 
-@app.route('/')
+
+@app.route("/")
 def home():
-    if 'username' in session:
-        username = session['username']
-        user = next((user for user in users if user.get_username() == username), None)
-        return render_template('main.html', user=user)
+    marketplace = marketcol.find_one({})
+    coin_inventory = marketplace.get("coin_inventory", 0)
+    coin_firstprice = marketplace.get("coin_firstprice", 0)
+    if "username" in session:
+        username = session["username"]
+        user = usercol.find_one({"username": username})
+        if user:
+            name = user["name"]
+            coins = user["coins"]
+            seed_money = user["seed_money"]
+
+            return render_template(
+                "main.html",
+                name=name,
+                coins=coins,
+                seed_money=seed_money,
+                user=user,
+                coin_inventory=coin_inventory,
+                coin_price=coin_firstprice,
+            )
+        else:
+            return "User not found"
     else:
-        return redirect(url_for('login'))
+        return redirect(url_for("login"))
 
 
-@app.route('/signup', methods=['GET', 'POST'])
+# 회원가입 페이지
+@app.route("/signup", methods=["GET", "POST"])
 def signup():
-    if 'username' in session:
-        return redirect(    url_for('home'))
+    # username이 있다면
+    if "username" in session:
+        return redirect(url_for("home"))
 
-    if request.method == 'POST':
-        name = request.form['name']
-        username = request.form['username']
-        password = request.form['password']
-        if any(user.username == username for user in users):
+    # DB에 저장
+    if request.method == "POST":
+        name = request.form["name"]
+        username = request.form["username"]
+        password = request.form["password"]
+
+        # username이 이미 존재한다면
+        if usercol.find_one({"username": username}):
             return "Username already exists"
-        new_user = User(name, username, password)
-        users.append(new_user)
+        else:  # db 세팅
+            new_user = {
+                "name": name,
+                "username": username,
+                "password": password,
+                "coins": 0,
+                "seed_money": 0,
+            }
+            usercol.insert_one(new_user)
 
-        return redirect(url_for('login')) 
+        # login으로 연결
+        return redirect(url_for("login"))
 
-    return render_template('signup.html')
+    return render_template("signup.html")
 
-@app.route('/login', methods=['GET', 'POST'])
+
+# 로그인
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if 'username' in session:
-        return redirect(url_for('home'))
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = next((user for user in users if user.get_username() == username), None)
-        if user and user.check_password(password):
-            session['username'] = username
-            return redirect(url_for('home'))  # 로그인 성공 시 메인 화면으로 이동
+    if "username" in session:
+        return redirect(url_for("home"))
+
+    # post to DB
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        user = usercol.find_one({"username": username})
+
+        if user and user["password"] == password:
+            session["username"] = username
+            return redirect(url_for("home", user=user))
         else:
             return "Invalid username or password"
-    return render_template('login.html')
+    return render_template("login.html")
 
 
-@app.route('/logout')
+# 로그아웃
+@app.route("/logout")
 def logout():
-    session.pop('username', None)  # 세션에서 사용자 이름을 제거합니다.
-    return redirect(url_for('login'))  # 로그인 페이지로 이동합니다.
+    # login 상태일 경우
+    if "username" in session:
+        session.pop("username", None)
+    return redirect(url_for("login"))
 
 
-@app.route('/buy_coin', methods=['POST'])
+# 마켓에서 코인을 구매
+@app.route("/buy_coin", methods=["POST"])
 def buy_coin():
-    if 'username' not in session:
-        return redirect(url_for('login'))
+    # login되어있는 상태일 경우
+    if "username" not in session:
+        return redirect(url_for("login"))
 
-    # 코인 개수 입력값 가져오기
-    coin_quantity = int(request.form['coin_quantity'])
+    # marketcol에서 문서 검색
+    marketplace = marketcol.find_one()
 
-    # 코인 개수가 0 이하인 경우
+    coin_inventory = marketplace.get("coin_inventory", 0)
+    coin_quantity = int(request.form["coin_quantity"])
     if coin_quantity <= 0:
         return "Invalid coin quantity"
-
-    # 코인 재고 확인
     if coin_quantity > coin_inventory:
         return "Insufficient coin inventory"
 
-    # 구매에 필요한 총 가격 계산
+    # 전체 가격 계산
     total_price = coin_firstprice * coin_quantity
 
-    # 사용자 정보 가져오기
-    username = session['username']
-    user = next((user for user in users if user.get_username() == username), None)
+    username = session["username"]
+    user = usercol.find_one({"username": username})
 
     if user:
-        # 사용자의 시드머니 확인
-        seed_money = user.get_seed_money()
-
-        # 시드머니가 구매에 필요한 가격보다 작거나 같은 경우
+        seed_money = user["seed_money"]
         if seed_money < total_price:
             return "Insufficient seed money"
-
-        # 코인 개수 업데이트
-        user.set_coin_quantity(user.get_coin_quantity() + coin_quantity)
-
-        # 코인 재고 감소
-        coin_inventory -= coin_quantity
-
-        # 시드머니 감소
-        user.set_seed_money(seed_money - total_price)
-
+        usercol.update_one(
+            {"username": username}, {"$inc": {"seed_money": -total_price}}
+        )
+        usercol.update_one({"username": username}, {"$inc": {"coins": coin_quantity}})
+        marketcol.update_one({}, {"$inc": {"coin_inventory": -coin_quantity}})
+        sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        coincol.update_one(
+            {},
+            {
+                "$push": {
+                    "coins": {
+                        "sold_time": sold_time,
+                        "quantity": coin_quantity,
+                        "price": coin_firstprice,
+                        "who": username,
+                    }
+                }
+            },
+        )
         return "Coin purchase successful"
-    else:
-        return redirect(url_for('login'))
+
+    return redirect(url_for("login"))
 
 
-@app.route('/charge_money', methods=['POST'])
+# 사용자가 제시한 코인을 산다.
+@app.route("/buy_user_coin", methods=["POST"])
+def buy_user_coin():
+    if "username" not in session:
+        return redirect(url_for("login"))
+    seller_username = request.form["seller_username"]
+    coin_quantity = int(request.form["coin_quantity"])
+    coin_price = float(request.form["coin_price"])
+    username = session["username"]
+    user = usercol.find_one({"username": username})
+
+    if user:
+        total_price = coin_firstprice * coin_quantity
+        seed_money = user["seed_money"]
+        if seed_money < total_price:
+            return "Insufficient seed money"
+        seller = marketcol.find_one(
+            {"username": seller_username},
+            {"name": 1, "coin_inventory": 1, "coin_firstprice": 1},
+        )
+        if not seller:
+            return "Seller not found"
+        seller_name = seller.get("name")
+        seller_coin_inventory = seller.get("coin_inventory", 0)
+        seller_coin_firstprice = seller.get("coin_firstprice", 0)
+        if (
+            seller_username == username
+            and coin_quantity <= seller_coin_inventory
+            and coin_price == seller_coin_firstprice
+        ):
+            usercol.update_one(
+                {"username": username}, {"$inc": {"seed_money": -total_price}}
+            )
+            usercol.update_one(
+                {"username": username}, {"$inc": {"coins": coin_quantity}}
+            )
+            del seller["name"]
+            del seller["coin_inventory"]
+            del seller["coin_firstprice"]
+            sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            coincol.update_one(
+                {},
+                {
+                    "$push": {
+                        "coins": {
+                            "sold_time": sold_time,
+                            "quantity": coin_quantity,
+                            "price": coin_firstprice,
+                            "who": username,
+                        }
+                    }
+                },
+            )
+            return f"Coin purchase successful. Bought {coin_quantity} coins from {seller_name} at {coin_price} each."
+        return "Invalid seller information"
+    return redirect(url_for("login"))
+
+
+# 코인 판매
+# 로그인 된 사용자만 사용 가능
+@app.route("/sell_coin", methods=["POST"])
+def sell_coin():
+    # 세션에 username이 없을 경우 로그인 페이지로 리다이렉트
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    coin_quantity = int(request.form["coin_quantity"])
+    coin_price = float(request.form["coin_price"])
+
+    # 수량 부족 시
+    if coin_quantity <= 0:
+        return "Invalid coin quantity"
+
+    # db에서 user의 정보를 확인
+    username = session["username"]
+    user = usercol.find_one({"username": username})
+
+    # user일 경우
+    if user:
+        coin_owned = user["coins"]
+        if coin_quantity > coin_owned:
+            return "Insufficient coin quantity"
+
+        usercol.update_one({"username": username}, {"$inc": {"coins": -coin_quantity}})
+
+        marketcol.insert_one(
+            {"quantity": -coin_quantity, "price": coin_price, "who": username}
+        )
+
+        return "Coin sold successfully"
+
+    return redirect(url_for("login"))
+
+
+# 입금
+@app.route("/charge_money", methods=["POST"])
 def charge_money():
-    if 'username' in session:
-        username = session['username']
-        password = request.form['password']
-
-        # Get the user object from the list of users
-        user = next((user for user in users if user.get_username() == username and user.check_password(password)), None)
+    if "username" in session:
+        username = session["username"]
+        user = usercol.find_one({"username": username})
 
         if user:
-            # Extract the seed money from the form data
-            seed_money = float(request.form['seed_money'])
+            seed_money = float(request.form["seed_money"])
+            usercol.update_one(
+                {"username": username}, {"$inc": {"seed_money": seed_money}}
+            )
+            return redirect(url_for("home"))
 
-            # Update the user's seed money
-            user.add_seed_money(seed_money)
+    return redirect(url_for("login"))
 
-            return redirect(url_for('home'))
 
-    return redirect(url_for('login'))
+# 출금
+@app.route("/convert_money", methods=["POST"])
+def convert_money():
+    if "username" not in session:
+        return redirect(url_for("login"))
 
-if __name__ == '__main__':
+    amount = float(request.form["amount"])
+
+    if amount <= 0:
+        return "Invalid amount"
+
+    username = session["username"]
+    user = usercol.find_one({"username": username})
+
+    if user:
+        seed_money = user["seed_money"]
+        if amount > seed_money:
+            return "Insufficient seed money"
+
+        usercol.update_one({"username": username}, {"$inc": {"seed_money": -amount}})
+        usercol.update_one({"username": username}, {"$inc": {"cash_money": amount}})
+
+        return "Money converted successfully"
+
+    return redirect(url_for("login"))
+
+
+if __name__ == "__main__":
     app.run(debug=True)
