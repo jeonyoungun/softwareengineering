@@ -11,10 +11,11 @@ coincol = db["coin"]
 marketcol = db["marketplace"]
 coin_inventory = 100
 coin_firstprice = 100
-marketcol.insert_one({
-    "coin_inventory": coin_inventory,
-    "coin_firstprice": coin_firstprice
-})
+if marketcol.count_documents({}) == 0:
+    marketcol.insert_one({
+        "coin_inventory": coin_inventory,
+        "coin_firstprice": coin_firstprice
+    })
 @app.route('/')
 def home():
     marketplace = marketcol.find_one({})
@@ -80,9 +81,7 @@ def login():
 @app.route('/logout')
 def logout():
     if 'username' in session:
-        username = session['username']
         session.pop('username', None)
-        usercol.delete_one({"username": username})
     return redirect(url_for('login'))
 
 @app.route('/buy_coin', methods=['POST'])
@@ -105,7 +104,7 @@ def buy_coin():
         if seed_money < total_price:
             return "Insufficient seed money"
         usercol.update_one({"username": username}, {"$inc": {"seed_money": -total_price}})
-        usercol.update_one({"username": username}, {"$inc": {"coin": coin_quantity}})
+        usercol.update_one({"username": username}, {"$inc": {"coins": coin_quantity}})
         marketcol.update_one({}, {"$inc": {"coin_inventory": -coin_quantity}})
         sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         coincol.update_one({}, {"$push": {"coins": {
@@ -118,11 +117,13 @@ def buy_coin():
 
     return redirect(url_for('login'))
 
-@app.route('/but_user_coin', methods=['POST'])
-def buy_coin():
+@app.route('/buy_user_coin', methods=['POST'])
+def buy_user_coin():
     if 'username' not in session:
         return redirect(url_for('login'))
+    seller_username = request.form['seller_username']
     coin_quantity = int(request.form['coin_quantity'])
+    coin_price = float(request.form['coin_price'])
     username = session['username']
     user = usercol.find_one({"username": username})
     
@@ -131,18 +132,31 @@ def buy_coin():
         seed_money = user['seed_money']
         if seed_money < total_price:
             return "Insufficient seed money"
-        usercol.update_one({"username": username}, {"$inc": {"seed_money": -total_price}})
-        usercol.update_one({"username": username}, {"$inc": {"coin": coin_quantity}})
-        marketcol.update_one({}, {"$inc": {"coin_inventory": -coin_quantity}})
-        sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        coincol.update_one({}, {"$push": {"coins": {
-            "sold_time": sold_time,
-            "quantity": coin_quantity,
-            "price": coin_firstprice,
-            "who": username
-        }}})
-        return "Coin purchase successful"
-
+        seller = marketcol.find_one({"username": seller_username}, {"name": 1, "coin_inventory": 1, "coin_firstprice": 1})
+        if not seller:
+            return "Seller not found"
+        seller_name = seller.get("name")
+        seller_coin_inventory = seller.get("coin_inventory", 0)
+        seller_coin_firstprice = seller.get("coin_firstprice", 0)
+        if (
+            seller_username == username and
+            coin_quantity <= seller_coin_inventory and
+            coin_price == seller_coin_firstprice
+        ):
+            usercol.update_one({"username": username}, {"$inc": {"seed_money": -total_price}})
+            usercol.update_one({"username": username}, {"$inc": {"coins": coin_quantity}})
+            del seller["name"]
+            del seller["coin_inventory"]
+            del seller["coin_firstprice"]
+            sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            coincol.update_one({}, {"$push": {"coins": {
+                "sold_time": sold_time,
+                "quantity": coin_quantity,
+                "price": coin_firstprice,
+                "who": username
+            }}})
+            return f"Coin purchase successful. Bought {coin_quantity} coins from {seller_name} at {coin_price} each."
+        return "Invalid seller information"
     return redirect(url_for('login'))
 
 
@@ -161,11 +175,11 @@ def sell_coin():
     user = usercol.find_one({"username": username})
 
     if user:
-        coin_owned = user['coin']
+        coin_owned = user['coins']
         if coin_quantity > coin_owned:
             return "Insufficient coin quantity"
 
-        usercol.update_one({"username": username}, {"$inc": {"coin": -coin_quantity}})
+        usercol.update_one({"username": username}, {"$inc": {"coins": -coin_quantity}})
   
         marketcol.insert_one({
             "quantity": -coin_quantity,
