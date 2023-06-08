@@ -34,33 +34,33 @@ def index():
 # main index html
 @app.route("/home")
 def home():
-    return render_template("home.html", title="Home")
-    # marketplace = marketcol.find_one({})
+    # return render_template("home.html", title="Home")
+    marketplace = marketcol.find_one({})
 
-    # coin_inventory = marketplace.get("coin_inventory", 0)
-    # coin_firstprice = marketplace.get("coin_firstprice", 0)
+    coin_inventory = marketplace.get("coin_inventory", 0)
+    coin_firstprice = marketplace.get("coin_firstprice", 0)
 
-    # if "username" in session:
-    #     username = session["username"]
-    #     user = usercol.find_one({"username": username})
-    #     if user:
-    #         name = user["name"]
-    #         coins = user["coins"]
-    #         seed_money = user["seed_money"]
+    if "username" in session:
+        username = session["username"]
+        user = usercol.find_one({"username": username})
+        if user:
+            name = user["name"]
+            coins = user["coins"]
+            seed_money = user["seed_money"]
 
-    #         return render_template(
-    #             "main.html",
-    #             name=name,
-    #             coins=coins,
-    #             seed_money=seed_money,
-    #             user=user,
-    #             coin_inventory=coin_inventory,
-    #             coin_price=coin_firstprice,
-    #         )
-    #     else:
-    #         return "User not found"
-    # else:
-    #     return redirect(url_for("index"))
+            return render_template(
+                "home.html",
+                name=name,
+                coins=coins,
+                seed_money=seed_money,
+                user=user,
+                coin_inventory=coin_inventory,
+                coin_price=coin_firstprice,
+            )
+        else:
+            return "User not found"
+    else:
+        return redirect(url_for("index"))
 
 
 # 회원가입 페이지
@@ -70,6 +70,7 @@ def signup():
     if "username" in session:
         return redirect(url_for("home"))
 
+    condition = False
     # DB에 저장
     if request.method == "POST":
         name = request.form["name"]
@@ -77,7 +78,7 @@ def signup():
         password = request.form["password"]
         # username이 이미 존재한다면
         if usercol.find_one({"username": username}):
-            flash("Username already exists", "error")
+            condition = False
             # return "Username already exists"
         else:  # db 세팅
             new_user = {
@@ -88,9 +89,8 @@ def signup():
                 "seed_money": 0,
             }
             usercol.insert_one(new_user)
-
-        flash("회원가입 완료", "success")
-        return redirect(url_for("login"))
+            flash("회원가입이 성공적으로 완료되었습니다!", "success")
+            return redirect("/login")
 
     return render_template("signup.html")
 
@@ -101,20 +101,18 @@ def login():
     if "username" in session:
         return redirect(url_for("home"))
 
-    # if post
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
 
-        loginuser = usercol.find_one({"username": username}) # get user info
+        user = usercol.find_one({"username": username})
 
-        # if user info is in db, and correct password
-        if loginuser and (loginuser["password"] == password):
+        if user and user["password"] == password:
             session["username"] = username
-            print("success")
-            return redirect(url_for("home", user=loginuser))
+            return redirect(url_for("home"))
         else:
             return "Invalid username or password"
+
     return render_template("login.html")
 
 
@@ -125,6 +123,16 @@ def logout():
     if "username" in session:
         session.pop("username", None)
     return redirect(url_for("login"))
+
+
+@app.route("/coinlist")
+def coinlist():
+    return render_template("coinlist.html")
+
+
+@app.route("/nav")
+def nav():
+    return render_template("nav.html")
 
 
 # 마켓에서 코인을 구매
@@ -176,6 +184,31 @@ def buy_coin():
         return "Coin purchase successful"
 
     return redirect(url_for("login"))
+
+
+@app.route("/mypage")
+def mypage():
+    if "username" in session:
+        username = session["username"]
+        user = usercol.find_one({"username": username})
+        if user:
+            name = user["name"]
+            coins = user["coins"]
+            seed_money = user["seed_money"]
+
+            return render_template(
+                "mypage.html",
+                name=name,
+                coins=coins,
+                seed_money=seed_money,
+                user=user,
+                coin_inventory=coin_inventory,
+                coin_price=coin_firstprice,
+            )
+        else:
+            return "User not found"
+    else:
+        return redirect(url_for("login"))
 
 
 # 사용자가 제시한 코인을 산다.
@@ -236,6 +269,14 @@ def buy_user_coin():
     return redirect(url_for("login"))
 
 
+# add coin
+# @app.route("/coin issuance", methods=["POST"])
+# def coin_issuance() :
+#     if request.method =="POST" :
+#         coin_name = request.form["name"]
+#         if c
+
+
 # 코인 판매
 # 로그인 된 사용자만 사용 가능
 @app.route("/sell_coin", methods=["POST"])
@@ -290,15 +331,15 @@ def charge_money():
 
 
 # 출금
-@app.route("/convert_money", methods=["POST"])
-def convert_money():
+@app.route("/withdraw", methods=["POST"])
+def withdraw():
     if "username" not in session:
         return redirect(url_for("login"))
 
     amount = float(request.form["amount"])
 
-    if amount <= 0:
-        return "Invalid amount"
+    # if amount <= 0:
+    #     return "Invalid amount"
 
     username = session["username"]
     user = usercol.find_one({"username": username})
@@ -311,10 +352,9 @@ def convert_money():
         usercol.update_one({"username": username}, {"$inc": {"seed_money": -amount}})
         usercol.update_one({"username": username}, {"$inc": {"cash_money": amount}})
 
-        return "Money converted successfully"
+        return
 
     return redirect(url_for("login"))
-
 
 
 if __name__ == "__main__":
