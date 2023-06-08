@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, session, redirect, url_for
 from pymongo import MongoClient
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'mysecretkey'  # Set your own secret key
@@ -101,13 +102,78 @@ def buy_coin():
 
     if user:
         seed_money = user['seed_money']
-        coin = user['coin']
         if seed_money < total_price:
             return "Insufficient seed money"
         usercol.update_one({"username": username}, {"$inc": {"seed_money": -total_price}})
         usercol.update_one({"username": username}, {"$inc": {"coin": coin_quantity}})
         marketcol.update_one({}, {"$inc": {"coin_inventory": -coin_quantity}})
+        sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        coincol.update_one({}, {"$push": {"coins": {
+            "sold_time": sold_time,
+            "quantity": coin_quantity,
+            "price": coin_firstprice,
+            "who": username
+        }}})
         return "Coin purchase successful"
+
+    return redirect(url_for('login'))
+
+@app.route('/but_user_coin', methods=['POST'])
+def buy_coin():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    coin_quantity = int(request.form['coin_quantity'])
+    username = session['username']
+    user = usercol.find_one({"username": username})
+    
+    if user:
+        total_price = coin_firstprice * coin_quantity
+        seed_money = user['seed_money']
+        if seed_money < total_price:
+            return "Insufficient seed money"
+        usercol.update_one({"username": username}, {"$inc": {"seed_money": -total_price}})
+        usercol.update_one({"username": username}, {"$inc": {"coin": coin_quantity}})
+        marketcol.update_one({}, {"$inc": {"coin_inventory": -coin_quantity}})
+        sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        coincol.update_one({}, {"$push": {"coins": {
+            "sold_time": sold_time,
+            "quantity": coin_quantity,
+            "price": coin_firstprice,
+            "who": username
+        }}})
+        return "Coin purchase successful"
+
+    return redirect(url_for('login'))
+
+
+@app.route('/sell_coin', methods=['POST'])
+def sell_coin():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    
+    coin_quantity = int(request.form['coin_quantity'])
+    coin_price = float(request.form['coin_price'])
+    
+    if coin_quantity <= 0:
+        return "Invalid coin quantity"
+
+    username = session['username']
+    user = usercol.find_one({"username": username})
+
+    if user:
+        coin_owned = user['coin']
+        if coin_quantity > coin_owned:
+            return "Insufficient coin quantity"
+
+        usercol.update_one({"username": username}, {"$inc": {"coin": -coin_quantity}})
+  
+        marketcol.insert_one({
+            "quantity": -coin_quantity,
+            "price": coin_price,
+            "who": username
+        })
+        
+        return "Coin sold successfully"
 
     return redirect(url_for('login'))
 
@@ -124,6 +190,29 @@ def charge_money():
             return redirect(url_for('home'))
 
     return redirect(url_for('login'))
+@app.route('/convert_money', methods=['POST'])
+def convert_money():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    
+    amount = float(request.form['amount'])
+    
+    if amount <= 0:
+        return "Invalid amount"
+    
+    username = session['username']
+    user = usercol.find_one({"username": username})
 
+    if user:
+        seed_money = user['seed_money']
+        if amount > seed_money:
+            return "Insufficient seed money"
+
+        usercol.update_one({"username": username}, {"$inc": {"seed_money": -amount}})
+        usercol.update_one({"username": username}, {"$inc": {"cash_money": amount}})
+        
+        return "Money converted successfully"
+
+    return redirect(url_for('login'))
 if __name__ == '__main__':
     app.run(debug=True)
