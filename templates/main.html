@@ -17,9 +17,9 @@
     </form>
 
     <hr>
-    <p>{{ user['name'] }}님, 환영합니다!</p>
-    <p>사용자 코인 개수: {{ coins }}</p>
-    <p>사용자 시드머니: {{ seed_money }}원</p>
+    <p>{{ user.name }}님, 환영합니다!</p>
+    <p>사용자 코인 개수: {{ user_coin_quantity }}</p>
+    <p>사용자 시드머니: {{ user_seed_money }}원</p>
     <h2>시드머니 충전</h2>
     <form method="POST" action="/charge_money">
         <label>충전할 시드머니</label>
