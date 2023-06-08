@@ -1,26 +1,25 @@
-from flask import Flask, render_template, request, session, redirect, url_for
+from flask import flash, Flask, render_template, request, session, redirect, url_for
 from pymongo import MongoClient
 from flask_pymongo import PyMongo
 from datetime import datetime
 
-
-# app = Flask(__name__)
-
-
 app = Flask(__name__)
-app.config["MONGO_URI"] = "mongodb://localhost:27017/softwear"  # MongoDB 연결 URI
-mongo = PyMongo(app)
+
+# app.config["MONGO_URI"] = "mongodb://localhost:27017/softwear"  # MongoDB 연결 URI
+# mongo = PyMongo(app)
 
 app.secret_key = "mysecretkey"  # Set your own secret key
 cluster = MongoClient(
     "mongodb+srv://2001dyddns:Z9QvQuFlMUzK2Ige@coinapp.h7x0xzm.mongodb.net/?retryWrites=true&w=majority"
 )
 db = cluster["coinmarket"]
-usercol = db["user"]
-coincol = db["coin"]
-marketcol = db["marketplace"]
-coin_inventory = 100
+usercol = db["user"]  # user info. include name,id, password,
+coincol = db["coin"]  # coin info. include quantity, cost
+marketcol = db["marketplace"]  # coin list
+coin_inventory = 100  # coin max
 coin_firstprice = 100
+
+# coin initialize
 if marketcol.count_documents({}) == 0:
     marketcol.insert_one(
         {"coin_inventory": coin_inventory, "coin_firstprice": coin_firstprice}
@@ -28,31 +27,40 @@ if marketcol.count_documents({}) == 0:
 
 
 @app.route("/")
-def home():
-    marketplace = marketcol.find_one({})
-    coin_inventory = marketplace.get("coin_inventory", 0)
-    coin_firstprice = marketplace.get("coin_firstprice", 0)
-    if "username" in session:
-        username = session["username"]
-        user = usercol.find_one({"username": username})
-        if user:
-            name = user["name"]
-            coins = user["coins"]
-            seed_money = user["seed_money"]
+def index():
+    return render_template("index.html", title="Main")
 
-            return render_template(
-                "main.html",
-                name=name,
-                coins=coins,
-                seed_money=seed_money,
-                user=user,
-                coin_inventory=coin_inventory,
-                coin_price=coin_firstprice,
-            )
-        else:
-            return "User not found"
-    else:
-        return redirect(url_for("login"))
+
+# main index html
+@app.route("/home")
+def home():
+    return render_template("home.html", title="Home")
+    # marketplace = marketcol.find_one({})
+
+    # coin_inventory = marketplace.get("coin_inventory", 0)
+    # coin_firstprice = marketplace.get("coin_firstprice", 0)
+
+    # if "username" in session:
+    #     username = session["username"]
+    #     user = usercol.find_one({"username": username})
+    #     if user:
+    #         name = user["name"]
+    #         coins = user["coins"]
+    #         seed_money = user["seed_money"]
+
+    #         return render_template(
+    #             "main.html",
+    #             name=name,
+    #             coins=coins,
+    #             seed_money=seed_money,
+    #             user=user,
+    #             coin_inventory=coin_inventory,
+    #             coin_price=coin_firstprice,
+    #         )
+    #     else:
+    #         return "User not found"
+    # else:
+    #     return redirect(url_for("index"))
 
 
 # 회원가입 페이지
@@ -67,10 +75,10 @@ def signup():
         name = request.form["name"]
         username = request.form["username"]
         password = request.form["password"]
-
         # username이 이미 존재한다면
         if usercol.find_one({"username": username}):
-            return "Username already exists"
+            flash("Username already exists", "error")
+            # return "Username already exists"
         else:  # db 세팅
             new_user = {
                 "name": name,
@@ -81,7 +89,7 @@ def signup():
             }
             usercol.insert_one(new_user)
 
-        # login으로 연결
+        flash("회원가입 완료", "success")
         return redirect(url_for("login"))
 
     return render_template("signup.html")
@@ -93,14 +101,17 @@ def login():
     if "username" in session:
         return redirect(url_for("home"))
 
-    # post to DB
+    # if post
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
+
         user = usercol.find_one({"username": username})
 
+        # if user info is in db, and correct password
         if user and user["password"] == password:
             session["username"] = username
+            print("success")
             return redirect(url_for("home", user=user))
         else:
             return "Invalid username or password"

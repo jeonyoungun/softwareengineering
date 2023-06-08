@@ -1,18 +1,37 @@
-document.addEventListener("DOMContentLoaded", function () {
-  var loginForm = document.querySelector("#login-form");
-  loginForm.addEventListener("submit", function (event) {
-    event.preventDefault(); // 폼의 기본 동작 중지
+//login.js
+document
+  .getElementById("loginForm")
+  .addEventListener("submit", function (event) {
+    event.preventDefault(); // 기본 동작 방지
 
-    var usernameInput = document.querySelector("#username");
-    var passwordInput = document.querySelector("#password");
-    var username = usernameInput.value;
-    var password = passwordInput.value;
+    var username = document.getElementById("username").value;
+    var password = document.getElementById("password").value;
 
-    // TODO: 입력값 유효성 검사 및 서버로 로그인 요청 전송
-
-    console.log("Username:", username);
-    console.log("Password:", password);
-
-    // TODO: 서버 응답에 따른 로그인 결과 처리
+    fetch("/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+      .then((response) => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error("Invalid response from server");
+        }
+      })
+      .then((result) => {
+        if (result.success) {
+          alert("Login successful");
+          console.log(result);
+          // Redirect to a new page or perform any other action
+        } else {
+          alert("Invalid username or password");
+        }
+      })
+      .catch(function (error) {
+        console.error(error);
+        alert("An error occurred during login");
+      });
   });
-});

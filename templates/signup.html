@@ -42,7 +42,7 @@
     }
 
     .form-group input[type="text"],
-    .form-group input[type="password"] {
+    .form-group input[type="username"] {
       width: 100%;
       padding: 8px;
       border: 1px solid #ccc;
@@ -69,7 +69,11 @@
 <body>
   <div class="container">
     <h2>Login to Coin Exchange</h2>
-    <form action="/register" method="POST" action="{{ url_for('login') }}">
+    <form action="/signup" method="POST">
+      <div class="form-group">
+        <label for="name"></label>
+        <input type="text" id="name" name="name" placeholder="이름">
+      </div>
       <div class="form-group">
         <label for="username"></label>
         <input type="text" id="username" name="username" placeholder="ID">
@@ -79,15 +83,12 @@
         <input type="password" id="password" name="password" placeholder="비밀번호">
       </div>
       <div class="form-group">
-        <label for="confirm-password"></label>
-        <input type="password" id="confirm-password" name="confirm-password" placeholder="비밀번호 확인">
-      </div>
-      <div class="form-group">
         <button type="submit">Submit</button>
       </div>
 
     </form>
     </script>
+
     <p><a href="index.html">Home</a></p>
 
   </div>

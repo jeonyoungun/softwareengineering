@@ -4,17 +4,17 @@ document
   .addEventListener("submit", function (event) {
     event.preventDefault();
 
+    var name = document.getElementById("name").value;
     var username = document.getElementById("username").value;
-    var pasword = document.getElementById("pasword").value;
-    var confirm_password = document.getElementById("confirm-password").value;
+    var password = document.getElementById("password").value;
 
     var data = {
+      name: name,
       username: username,
-      pasword: pasword,
-      confirm_password: confirm_password,
+      password: password,
     };
 
-    fetch("/register", {
+    fetch("/signup", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

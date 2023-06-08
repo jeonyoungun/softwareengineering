@@ -64,12 +64,12 @@
             background-color: #45a049;
         }
     </style>
+    <script src="../static/js/login.js"></script>
 </head>
 
 <body>
     <div class="container">
-        <h2>Login to Coin Exchange</h2>
-        <form action="/save-data" method="POST">
+        <form action="/login" method="POST">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" placeholder="Enter your username" required>
@@ -84,8 +84,8 @@
 
         </form>
         </script>
-        <p>아직 회원이 아니신가요? <a href="signup.html">회원가입</a></p>
-        <p>메인 화면으로 이동하려면 <a href="index.html">Home</a>를 클릭하세요.</p>
+        <p>아직 회원이 아니신가요? <a href="/signup">회원가입</a></p>
+        <p>메인 화면으로 이동하려면 <a href="/">Home</a>를 클릭하세요.</p>
     </div>
 </body>
 

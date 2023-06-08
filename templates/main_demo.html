@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Coin Exchange</title>
+    <style>
+        /* 추가된 CSS 스타일 */
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+        }
+
+        nav {
+            display: flex;
+            justify-content: center;
+        }
+
+        ul {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            margin: 0 10px;
+        }
+
+        a {
+            color: #fff;
+            text-decoration: none;
+        }
+
+        .nav-item {
+            background-color: #fff;
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 4px;
+            transition: background-color 0.3s ease;
+        }
+
+        .nav-item:hover {
+            background-color: #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Welcome to Coin Exchange</h1>
+        <nav>
+            <ul>
+                <li><a class="nav-item" href="/main">Home</a></li>
+                <li><a class="nav-item" href="/mypage">My Page</a></li>
+                <li><a class="nav-item" href="/logout">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <section>
+            <h2>Coins</h2>
+            <ul id="coinList">
+                <!-- 동적으로 코인 목록을 생성할 예정 -->
+            </ul>
+        </section>
+
+        <section>
+            <h2>Market Prices</h2>
+            <table id="marketPrices">
+                <thead>
+                    <tr>
+                        <th>Coin</th>
+                        <th>Price</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 동적으로 시세 정보를 생성할 예정 -->
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script src="main.js"></script>
+</body>
+
+</html>
