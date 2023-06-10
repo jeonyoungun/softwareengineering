@@ -10,6 +10,10 @@ from flask import (
 )
 from pymongo import MongoClient
 from datetime import datetime
+from bson import ObjectId
+import matplotlib.pyplot as plt
+import io
+import base64
 
 app = Flask(__name__)
 
@@ -37,15 +41,11 @@ def index():
     return render_template("index.html", title="Main")
 
 
-# main index html
 @app.route("/home")
 def home():
-    # return render_template("home.html", title="Home")
     marketplace = marketcol.find_one({})
-
     coin_inventory = marketplace.get("coin_inventory", 0)
     coin_firstprice = marketplace.get("coin_firstprice", 0)
-
     if "username" in session:
         username = session["username"]
         user = usercol.find_one({"username": username})
@@ -53,40 +53,56 @@ def home():
             name = user["name"]
             coins = user["coins"]
             seed_money = user["seed_money"]
+            market_data = marketcol.find({"quantity": {"$gt": 0}})
+            data_list = list(market_data)
 
+            coin_sell_data = coincol.find({"quantity": {"$gt": 0}})
+            coin_sell_data_list = list(coin_sell_data)
+            # sold_time과 price 데이터 추출
+            sold_time_list = [data["sold_time"] for data in coin_sell_data_list]
+            price_list = [data["price"] for data in coin_sell_data_list]
+
+            # 그래프 생성
+            plt.plot(sold_time_list, price_list)
+            plt.xlabel("Sold Time")
+            plt.ylabel("Price")
+            plt.title("Coin Sell Data")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            img_stream = io.BytesIO()
+            plt.savefig(img_stream, format="png")
+            img_stream.seek(0)
+            img_base64 = base64.b64encode(img_stream.getvalue()).decode("utf-8")
             return render_template(
-                "home.html",
+                "main.html",
                 name=name,
                 coins=coins,
                 seed_money=seed_money,
                 user=user,
                 coin_inventory=coin_inventory,
                 coin_price=coin_firstprice,
+                data_list=data_list,
+                graph_data=img_base64,
             )
         else:
             return "User not found"
     else:
-        return redirect(url_for("index"))
+        return redirect(url_for("login"))
 
 
-# 회원가입 페이지
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
-    # username이 있다면
     if "username" in session:
         return redirect(url_for("home"))
 
-    condition = False
-    # DB에 저장
     if request.method == "POST":
         name = request.form["name"]
         username = request.form["username"]
         password = request.form["password"]
-        # username이 이미 존재한다면
+
         if usercol.find_one({"username": username}):
-            condition = False
-            # return "Username already exists"
-        else:  # db 세팅
+            return "Username already exists"
+        else:
             new_user = {
                 "name": name,
                 "username": username,
@@ -96,7 +112,7 @@ def signup():
             }
             usercol.insert_one(new_user)
 
-            return jsonify(message="회원가입 완료", redirect="/login")
+        return redirect(url_for("login"))
 
     return render_template("signup.html")
 
@@ -140,15 +156,16 @@ def coinlist():
 def nav():
     return render_template("nav.html")
 
+
 # 코인의 주문목록 / 히스토리 확인
 @app.route("/coin")
 def coin():
-    if "username" not in session :
+    if "username" not in session:
         return redirect(url_for("login"))
-    
-    # marketplace의 정보를 가져온다. 
 
-    # 
+    # marketplace의 정보를 가져온다.
+
+    #
 
     return render_template("coin.html")
 
@@ -186,19 +203,15 @@ def buy_coin():
         usercol.update_one({"username": username}, {"$inc": {"coins": coin_quantity}})
         marketcol.update_one({}, {"$inc": {"coin_inventory": -coin_quantity}})
         sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        coincol.update_one(
-            {},
+        coincol.insert_one(
             {
-                "$push": {
-                    "coins": {
-                        "sold_time": sold_time,
-                        "quantity": coin_quantity,
-                        "price": coin_firstprice,
-                        "who": username,
-                    }
-                }
-            },
+                "sold_time": sold_time,
+                "quantity": coin_quantity,
+                "price": coin_firstprice,
+                "who": username,
+            }
         )
+
         return "Coin purchase successful"
 
     return redirect(url_for("login"))
@@ -229,7 +242,6 @@ def mypage():
         return redirect(url_for("login"))
 
 
-# 사용자가 제시한 코인을 산다.
 @app.route("/buy_user_coin", methods=["POST"])
 def buy_user_coin():
     if "username" not in session:
@@ -246,53 +258,39 @@ def buy_user_coin():
         if seed_money < total_price:
             return "Insufficient seed money"
         seller = marketcol.find_one(
-            {"username": seller_username},
-            {"name": 1, "coin_inventory": 1, "coin_firstprice": 1},
+            {
+                "who": seller_username,
+                "quantity": {"$gte": coin_quantity},
+                "price": coin_price,
+            }
         )
         if not seller:
             return "Seller not found"
-        seller_name = seller.get("name")
-        seller_coin_inventory = seller.get("coin_inventory", 0)
-        seller_coin_firstprice = seller.get("coin_firstprice", 0)
-        if (
-            seller_username == username
-            and coin_quantity <= seller_coin_inventory
-            and coin_price == seller_coin_firstprice
-        ):
+        else:
             usercol.update_one(
                 {"username": username}, {"$inc": {"seed_money": -total_price}}
             )
             usercol.update_one(
                 {"username": username}, {"$inc": {"coins": coin_quantity}}
             )
-            del seller["name"]
-            del seller["coin_inventory"]
-            del seller["coin_firstprice"]
-            sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            coincol.update_one(
-                {},
+            marketcol.delete_many(
                 {
-                    "$push": {
-                        "coins": {
-                            "sold_time": sold_time,
-                            "quantity": coin_quantity,
-                            "price": coin_firstprice,
-                            "who": username,
-                        }
-                    }
-                },
+                    "who": seller_username,
+                    "quantity": {"$gte": coin_quantity},
+                    "price": coin_price,
+                }
             )
-            return f"Coin purchase successful. Bought {coin_quantity} coins from {seller_name} at {coin_price} each."
-        return "Invalid seller information"
+            sold_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            coincol.insert_one(
+                {
+                    "sold_time": sold_time,
+                    "quantity": coin_quantity,
+                    "price": coin_price,
+                    "who": username,
+                }
+            )
+            return f"Coin purchase successful. Bought {coin_quantity} coins from {seller_username} at {coin_price} each."
     return redirect(url_for("login"))
-
-
-# add coin
-# @app.route("/coin issuance", methods=["POST"])
-# def coin_issuance() :
-#     if request.method =="POST" :
-#         coin_name = request.form["name"]
-#         if c
 
 
 # 코인 판매
@@ -320,14 +318,10 @@ def sell_coin():
         if coin_quantity > coin_owned:
             return "Insufficient coin quantity"
 
-        usercol.update_one(
-            {"username": username}, 
-            {"$inc": {"coins": -coin_quantity}})
+        usercol.update_one({"username": username}, {"$inc": {"coins": -coin_quantity}})
 
         marketcol.insert_one(
-            {"quantity": -coin_quantity, 
-             "price": coin_price, 
-             "who": username}
+            {"quantity": coin_quantity, "price": coin_price, "who": username}
         )
 
         return "Coin sold successfully"
@@ -372,9 +366,8 @@ def withdraw():
             return "Insufficient seed money"
 
         usercol.update_one({"username": username}, {"$inc": {"seed_money": -amount}})
-        usercol.update_one({"username": username}, {"$inc": {"cash_money": amount}})
 
-        return jsonify(message="Money converted successfully")
+        return redirect(url_for("home"))
 
     return redirect(url_for("login"))
 
