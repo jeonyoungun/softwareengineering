@@ -1,12 +1,18 @@
-from flask import flash, Flask, render_template, request, session, redirect, url_for
+from flask import (
+    flash,
+    Flask,
+    jsonify,
+    render_template,
+    request,
+    session,
+    redirect,
+    url_for,
+)
 from pymongo import MongoClient
-from flask_pymongo import PyMongo
 from datetime import datetime
 
 app = Flask(__name__)
 
-# app.config["MONGO_URI"] = "mongodb://localhost:27017/softwear"  # MongoDB 연결 URI
-# mongo = PyMongo(app)
 
 app.secret_key = "mysecretkey"  # Set your own secret key
 cluster = MongoClient(
@@ -89,8 +95,8 @@ def signup():
                 "seed_money": 0,
             }
             usercol.insert_one(new_user)
-            flash("회원가입이 성공적으로 완료되었습니다!", "success")
-            return redirect("/login")
+
+            return jsonify(message="회원가입 완료", redirect="/login")
 
     return render_template("signup.html")
 
@@ -133,6 +139,18 @@ def coinlist():
 @app.route("/nav")
 def nav():
     return render_template("nav.html")
+
+# 코인의 주문목록 / 히스토리 확인
+@app.route("/coin")
+def coin():
+    if "username" not in session :
+        return redirect(url_for("login"))
+    
+    # marketplace의 정보를 가져온다. 
+
+    # 
+
+    return render_template("coin.html")
 
 
 # 마켓에서 코인을 구매
@@ -302,10 +320,14 @@ def sell_coin():
         if coin_quantity > coin_owned:
             return "Insufficient coin quantity"
 
-        usercol.update_one({"username": username}, {"$inc": {"coins": -coin_quantity}})
+        usercol.update_one(
+            {"username": username}, 
+            {"$inc": {"coins": -coin_quantity}})
 
         marketcol.insert_one(
-            {"quantity": -coin_quantity, "price": coin_price, "who": username}
+            {"quantity": -coin_quantity, 
+             "price": coin_price, 
+             "who": username}
         )
 
         return "Coin sold successfully"
@@ -352,7 +374,7 @@ def withdraw():
         usercol.update_one({"username": username}, {"$inc": {"seed_money": -amount}})
         usercol.update_one({"username": username}, {"$inc": {"cash_money": amount}})
 
-        return
+        return jsonify(message="Money converted successfully")
 
     return redirect(url_for("login"))
 
